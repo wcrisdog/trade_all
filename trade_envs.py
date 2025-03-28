@@ -128,7 +128,7 @@ class PricingEnvironment:
 
 # Example usage and testing:
 def run_simulation(seed = 1234):
-    key = jrng.PRNGKey(seed)
+    # key = jrng.PRNGKey(seed)
     num_rounds = 10
     # Create an environment with 5 consumers, true production cost 5, and consumers' demands drawn from N(10,2)
     env = PricingEnvironment(num_consumers=5, true_cost=5.0, demand_mean=10.0, demand_std=2.0,
