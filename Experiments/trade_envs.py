@@ -1,6 +1,5 @@
 import jax.numpy as jnp
 import jax.random as jrng
-import numpy as np
 
 class PricingEnvironment:
     def __init__(
@@ -61,7 +60,7 @@ class PricingEnvironment:
         self.key, subkey = jrng.split(self.key)
         current_demands = jrng.normal(subkey, shape=(self.num_consumers,)) * self.demand_std + self.demand_mean
         self.last_demands = current_demands  # Save for seller's use in subsequent rounds
-        self.history["demands"].append(np.array(current_demands))
+        self.history["demands"].append(jnp.array(current_demands))
 
         # Each consumer accepts if the offered price is <= their demand.
         sales = producer_prices <= current_demands
@@ -95,11 +94,11 @@ class PricingEnvironment:
             self.cost_estimates = 0.5 * self.cost_estimates + 0.5 * average_cost
         
         # Save round history
-        self.history["prices"].append(np.array(producer_prices))
-        self.history["sales"].append(np.array(sales))
-        self.history["producer_profit"].append(float(producer_profit))
-        self.history["consumer_gains"].append(np.array(consumer_gains))
-        self.history["communications"].append(np.array(communicated_messages))
+        self.history["prices"].append(jnp.array(producer_prices))
+        self.history["sales"].append(jnp.array(sales))
+        self.history["producer_profit"].append(producer_profit.astype(float))
+        self.history["consumer_gains"].append(jnp.array(consumer_gains))
+        self.history["communications"].append(jnp.array(communicated_messages))
         
         return {
             "sales": sales,
@@ -150,12 +149,12 @@ def run_simulation(seed = 1234):
         result = env.step(producer_prices)
         
         print(f"Round {round_idx+1}")
-        print(" Offered Prices:", np.array(producer_prices))
-        print(" Realized Demands:", np.array(result["demands"]))
-        print(" Sales (accepted):", np.array(result["sales"]))
+        print(" Offered Prices:", jnp.array(producer_prices))
+        print(" Realized Demands:", jnp.array(result["demands"]))
+        print(" Sales (accepted):", jnp.array(result["sales"]))
         print(" Producer Profit:", float(result["producer_profit"]))
-        print(" Consumer Gains:", np.array(result["consumer_gains"]))
-        print(" Communications:", np.array(result["communications"]))
+        print(" Consumer Gains:", jnp.array(result["consumer_gains"]))
+        print(" Communications:", jnp.array(result["communications"]))
         print("-"*40)
         
 if __name__ == "__main__":
