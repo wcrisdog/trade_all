@@ -159,4 +159,4 @@ def run_simulation(seed = 1234):
         print("-"*40)
         
 if __name__ == "__main__":
-    run_simulation(seed = 42)
+    run_simulation(seed = 12)
