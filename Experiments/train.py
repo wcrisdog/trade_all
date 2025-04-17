@@ -5,6 +5,7 @@ import numpy as np
 
 from trade_envs import PricingEnvironment
 from producer import reinforce_loss
+from consumer import  consumer_policy
 
 def clip_gradients(grads, max_norm=1.0):
     grad_norm = jnp.sqrt(sum(jnp.sum(jnp.square(g)) for g in jax.tree.leaves(grads)))
@@ -15,6 +16,9 @@ sigma = 0.5
 learning_rate = 0.0001
 theta = jnp.array([0.8, 0.0])
 num_episodes = 500
+
+# Set the initial parameters for the consumer policy.
+theta_consumer = jnp.array([1.0, 0.5])
 
 def train_step(carry, ep):
     """
@@ -27,7 +31,7 @@ def train_step(carry, ep):
                              communication_mode='price', lie_std=0.5, seed= 1234 + ep.astype(int))
     # Compute the loss and its gradients using REINFORCE loss.
     (loss_val, aux), grads = jax.value_and_grad(reinforce_loss, has_aux=True)(
-        theta, env, key, sigma, num_rounds=10)
+        theta, env, theta_consumer, key, sigma, num_rounds=10)
     # Optionally clip gradients.
     grads = clip_gradients(grads, max_norm=1.0)
     # Update parameters.
@@ -38,7 +42,7 @@ def train_step(carry, ep):
     return (theta_new, key_new), logs
 
 # Initialize the PRNG key and our starting state.
-init_key = jrng.PRNGKey(1234)
+init_key = jrng.PRNGKey(12349)
 carry_init = (theta, init_key)
 
 # Use jax.lax.scan to iterate the training step over num_episodes.
