@@ -10,7 +10,7 @@ class PricingEnvironment:
             demand_std=2.0,
             communication_mode='price', # cost
             lie_std=0.0,
-            seed = 42
+            seed = 1234
         ):  # standard deviation of noise added when communicating (0.0 = truthful)
         """
         num_consumers: Number of consumers in the simulation.
