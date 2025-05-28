@@ -10,7 +10,8 @@ class PricingEnvironment:
             demand_std=2.0,
             communication_mode='price', # cost
             lie_std=0.0,
-            seed = 1234
+            seed = 1234,
+            adjacency = None
         ):  # standard deviation of noise added when communicating (0.0 = truthful)
         """
         num_consumers: Number of consumers in the simulation.
@@ -31,6 +32,16 @@ class PricingEnvironment:
 
         self.key = jrng.PRNGKey(seed)
 
+        # Consumer Network structure, with adjacency matrix
+        if adjacency is None:
+            # fully connected (excluding self)
+            adj = jnp.ones((num_consumers, num_consumers)) - jnp.eye(num_consumers)
+        else:
+            adj = jnp.array(adjacency, dtype=float)
+
+        degrees = jnp.sum(adj, axis=1, keepdims=True)
+        self.adjacency = adj / degrees  # each row sums to 1
+
         self.cost_estimates = jnp.ones(num_consumers) * (demand_mean / 2)
         
         # Store information
@@ -40,7 +51,8 @@ class PricingEnvironment:
             "producer_profit": [],
             "consumer_gains": [],
             "communications": [],
-            "demands": []
+            "demands": [],
+            "neighbor_avg": []
         }
         self.last_demands = None
     
@@ -59,7 +71,7 @@ class PricingEnvironment:
         # Sample the current round's consumer willingness-to-pay
         self.key, subkey = jrng.split(self.key)
         current_demands = jrng.normal(subkey, shape=(self.num_consumers,)) * self.demand_std + self.demand_mean
-        self.last_demands = current_demands  # Save for seller's use in subsequent rounds
+        self.last_demands = current_demands
         self.history["demands"].append(jnp.array(current_demands))
 
         # Each consumer accepts if the offered price is <= their demand.
@@ -83,29 +95,26 @@ class PricingEnvironment:
             messages = jnp.zeros(self.num_consumers)
         
         # Add noise to messages to simulate lying/misinformation
-        self.key, subkey_noise = jrng.split(self.key)
-        noise = jrng.normal(subkey_noise, shape=(self.num_consumers,)) * self.lie_std
-        communicated_messages = messages + noise
-        
-        # Optionally, consumers update their own estimates based on the average of messages.
-        # Here we simulate a simple consensus update if mode is 'cost'.
-        if self.communication_mode == 'cost':
-            average_cost = jnp.mean(communicated_messages)
-            self.cost_estimates = 0.5 * self.cost_estimates + 0.5 * average_cost
+        self.key, subkey2 = jrng.split(self.key)
+        # noise = jrng.normal(subkey2, (self.num_consumers,)) * self.lie_std
+        communicated = messages
+
+        neighbor_avg = jnp.dot(self.adjacency, communicated)
         
         # Save round history
         self.history["prices"].append(jnp.array(producer_prices))
         self.history["sales"].append(jnp.array(sales))
         self.history["producer_profit"].append(producer_profit.astype(float))
         self.history["consumer_gains"].append(jnp.array(consumer_gains))
-        self.history["communications"].append(jnp.array(communicated_messages))
+        self.history["communications"].append(jnp.array(communicated))
         
         return {
             "sales": sales,
             "producer_profit": producer_profit,
             "consumer_gains": consumer_gains,
-            "communications": communicated_messages,
-            "demands": current_demands
+            "communications": communicated,
+            "demands": current_demands,
+            'neighbor_avg': neighbor_avg
         }
     
     def reset(self):

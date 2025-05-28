@@ -4,8 +4,7 @@ import jax
 import numpy as np
 
 from trade_envs import PricingEnvironment
-from producer import reinforce_loss
-from consumer import consumer_policy
+from producer import producer_loss, consumer_loss
 
 def clip_gradients(grads, max_norm=1.0):
     grad_norm = jnp.sqrt(sum(jnp.sum(jnp.square(g)) for g in jax.tree.leaves(grads)))
@@ -13,66 +12,62 @@ def clip_gradients(grads, max_norm=1.0):
     return clipped_grads
 
 sigma = 0.5
-learning_rate = 0.0001
-theta = jnp.array([0.8, 0.0])
+lr_prod = 1e-4
+lr_cons = 1e-4
 num_episodes = 500
 
-# Set the initial parameters for the consumer policy.
-theta_consumer = jnp.array([1.0, 0.5])
+# Set the initial parameters for the producer and consumer policy.
+theta_prod = jnp.array([0.8, 0.0])
+theta_cons = jnp.array([1.0, 0.5, 0.2])
+
+# Static environment parameters dict
+adj = jnp.ones((5,5)) - jnp.eye(5)
+adj = adj.at[0, 1].set(0)
+adj = adj.at[1, 0].set(0)
+adj = adj / jnp.sum(adj, axis=1, keepdims=True)
+env_params = {
+    'num_consumers': 5,
+    'demand_mean': 10.0,
+    'demand_std': 2.0,
+    'true_cost': 2.0,
+    'adjacency': adj,
+    'communication_mode': 'price',
+    'lie_std': 0.5
+}
 
 def train_step(carry, ep):
-    """
-    carry: Tuple containing (theta, key) — current policy parameters and a PRNG key.
-    ep: Episode index (used to vary the environment seed).
-    """
-    theta, key = carry
-    # Create a new environment instance. Here we adjust the seed per episode.
-    env = PricingEnvironment(num_consumers=5, true_cost=5.0, demand_mean=10.0, demand_std=2.0,
-                             communication_mode='price', lie_std=0.5, seed= 1234 + ep.astype(int))
-    # Compute the loss and its gradients using REINFORCE loss.
-    (loss_val, aux), grads = jax.value_and_grad(reinforce_loss, has_aux=True)(
-        theta, env, theta_consumer, key, sigma, num_rounds=10)
-    # Optionally clip gradients.
-    grads = clip_gradients(grads, max_norm=1.0)
-    # Update parameters.
-    theta_new = theta - learning_rate * grads
-    total_reward, key_new = aux
-    # For logging, record loss and total reward.
-    logs = (loss_val, total_reward)
-    return (theta_new, key_new), logs
+    theta_p, theta_c, key = carry
+    # Update producer
+    (loss_p, (r_p, key)), grads_p = jax.value_and_grad(
+        producer_loss, has_aux=True)(theta_p, env_params, theta_c, key, sigma)
+    grads_p = clip_gradients(grads_p)
+    theta_p = theta_p - lr_prod * grads_p
+    # Update consumer
+    (loss_c, (u_c, key)), grads_c = jax.value_and_grad(
+        consumer_loss, has_aux=True)(theta_c, env_params, theta_p, key, sigma)
+    grads_c = clip_gradients(grads_c)
+    theta_c = theta_c - lr_cons * grads_c
+    logs = (loss_p, r_p, loss_c, u_c)
+    return (theta_p, theta_c, key), logs
 
-# Initialize the PRNG key and our starting state.
-init_key = jrng.PRNGKey(12349)
-carry_init = (theta, init_key)
+# Initialize
+init_key = jrng.PRNGKey(0)
+carry_init = (theta_prod, theta_cons, init_key)
 
-# Use jax.lax.scan to iterate the training step over num_episodes.
-# Here, we simply scan over an array of episode indices.
+# Run training
 carry_final, logs = jax.lax.scan(train_step, carry_init, jnp.arange(num_episodes))
-final_theta, final_key = carry_final
+final_theta_prod, final_theta_cons, _ = carry_final
 
-# Convert logs to NumPy arrays for printing.
+# Convert logs to numpy for printing
 logs_np = jax.tree.map(np.array, logs)
-losses_np, rewards_np = logs_np
+p_loss, p_reward, c_loss, c_util = logs_np
 
-# Print progress every 50 episodes.
-for ep in range(0, num_episodes, 50):
-    print(f"Episode {ep}: Loss {losses_np[ep]:.2f}, Total Profit {rewards_np[ep]:.2f}")
+# Print progress
+after = range(0, num_episodes, 50)
+for ep in after:
+    print(f"Episode {ep}: Prod Loss {p_loss[ep]:.2f}, Profit {p_reward[ep]:.2f}, "
+          f"Cons Loss {c_loss[ep]:.2f}, Util {c_util[ep]:.2f}")
 
-print("Learned producer policy parameters:", final_theta)
+print("Final producer params:", final_theta_prod)
+print("Final consumer params:", final_theta_cons)
 
-# for ep in range(num_episodes):
-#     # For each episode, create a new environment instance
-#     env = PricingEnvironment(num_consumers=5, true_cost=5.0, demand_mean=10.0, demand_std=2.0,
-#                              communication_mode='price', lie_std=0.5, seed=42)
-#     key = jrng.PRNGKey(42 + ep)
-#     (loss_val, aux), grads = jax.value_and_grad(reinforce_loss, has_aux=True)(theta, env, key, sigma, num_rounds=10)
-#     grads = clip_gradients(grads, max_norm=1.0) 
-#     (total_reward, key) = aux
-#     theta = theta - learning_rate * grads
-#     if ep % 50 == 0:
-#         loss_val_np = float(loss_val)
-#         total_reward_np = float(total_reward)
-#         theta_np = np.array(theta)
-#         print(f"Episode {ep}: Loss {loss_val_np:.2f}, Total Profit {total_reward_np:.2f}, Theta {theta_np}")
-
-# print("Learned producer policy parameters:", theta)
