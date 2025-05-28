@@ -1,6 +1,6 @@
 # consumer.py
 import jax.numpy as jnp
-import jax.nn as jnn
+import jax.nn as nn
 
 def consumer_policy(theta_cons, offer_prices, willingness, fairness_signal):
     """
@@ -24,5 +24,5 @@ def consumer_policy(theta_cons, offer_prices, willingness, fairness_signal):
     # Compute a “net utility” combining surplus and a fairness penalty.
     net_utility = theta_cons[0] * surplus - theta_cons[1] * penalty
     # Pass through a sigmoid to get a probability in [0,1]
-    prob = jnn.sigmoid(net_utility)
+    prob = nn.sigmoid(net_utility)
     return prob

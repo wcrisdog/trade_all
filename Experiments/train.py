@@ -5,7 +5,7 @@ import numpy as np
 
 from trade_envs import PricingEnvironment
 from producer import reinforce_loss
-from consumer import  consumer_policy
+from consumer import consumer_policy
 
 def clip_gradients(grads, max_norm=1.0):
     grad_norm = jnp.sqrt(sum(jnp.sum(jnp.square(g)) for g in jax.tree.leaves(grads)))
